@@ -60,6 +60,16 @@
   .pesquisa a{color:var(--cor-escura);word-break:break-word}
   .pesquisa iframe{border:0;width:100%;height:64px}
   .pesquisa .btn{align-self:flex-start;padding:7px 12px;font-size:.88rem}
+  .rotulo{font-size:.88rem;font-weight:600;margin-bottom:-6px}
+  .foto-opcoes{display:flex;gap:10px;flex-wrap:wrap}
+  .foto-opcoes .btn{flex:1 1 160px;text-align:center}
+  .arquivo{flex-direction:row;justify-content:center;font-size:1rem}
+  .webcam{display:flex;flex-direction:column;gap:10px}
+  .webcam video{width:100%;max-height:300px;background:#111;border-radius:10px;object-fit:contain}
+  .webcam select{padding:9px 10px;border:1px solid var(--linha);border-radius:10px;background:#fff}
+  .flash{animation:flash .35s ease-out}
+  @keyframes flash{from{filter:brightness(2.2)}to{filter:none}}
+  @media (prefers-reduced-motion:reduce){.flash{animation:none}}
   footer{text-align:center;color:var(--suave);font-size:.78rem;padding:0 0 24px}
   .oculto{display:none!important}
 </style>
@@ -70,6 +80,7 @@
     <h1 id="titulo">Catálogo</h1>
     <input class="busca" id="busca" type="search" placeholder="Buscar produto…" aria-label="Buscar produto">
     <button class="btn oculto" id="btnNovo">+ Novo produto</button>
+    <button class="btn claro oculto" id="btnNovoCam">Cadastrar pela webcam</button>
     <button class="btn claro" id="btnEntrar">Entrar</button>
     <button class="btn claro oculto" id="btnSair">Sair</button>
   </div>
@@ -80,7 +91,7 @@
   <div class="grade" id="grade"></div>
   <p class="vazio oculto" id="vazio">Nenhum produto por aqui ainda.</p>
 </main>
-<footer>versão CAT-002</footer>
+<footer>versão CAT-004</footer>
 
 <!-- Login -->
 <dialog id="dlgLogin">
@@ -109,7 +120,19 @@
     <label>Descrição (opcional) <textarea id="pDesc" maxlength="500"></textarea></label>
     <button type="button" class="btn claro" id="btnPesquisar">Pesquisar preço médio na internet</button>
     <div class="pesquisa oculto" id="resultadoPreco" aria-live="polite"></div>
-    <label>Foto <input type="file" id="pFoto" accept="image/*"></label>
+    <span class="rotulo">Foto</span>
+    <div class="foto-opcoes">
+      <button type="button" class="btn" id="btnWebcam">Tirar foto com a webcam</button>
+      <label class="btn claro arquivo">Escolher arquivo<input type="file" id="pFoto" accept="image/*" hidden></label>
+    </div>
+    <div class="webcam oculto" id="painelWebcam">
+      <select id="listaCameras" class="oculto" aria-label="Escolher câmera"></select>
+      <video id="video" autoplay playsinline muted></video>
+      <div class="botoes">
+        <button type="button" class="btn claro" id="btnFecharWebcam">Fechar câmera</button>
+        <button type="button" class="btn" id="btnFotografar">Fotografar</button>
+      </div>
+    </div>
     <img class="previa" id="previa" alt="Prévia da foto">
     <p class="erro" id="erroProduto"></p>
     <div class="botoes">
@@ -224,6 +247,7 @@
     });
     $("vazio").classList.toggle("oculto", lista.length > 0);
     $("btnNovo").classList.toggle("oculto", !token);
+    $("btnNovoCam").classList.toggle("oculto", !token);
     $("btnSair").classList.toggle("oculto", !token);
     $("btnEntrar").classList.toggle("oculto", !!token);
   }
@@ -303,22 +327,92 @@
   $("btnNovo").onclick = () => abrirProduto(null);
 
   // Diminui a foto antes de enviar (site leve)
+  function usarImagem(fonte, largura, altura){
+    const max = 900, esc = Math.min(1, max / Math.max(largura, altura));
+    const c = document.createElement("canvas");
+    c.width = Math.round(largura * esc); c.height = Math.round(altura * esc);
+    c.getContext("2d").drawImage(fonte, 0, 0, c.width, c.height);
+    const url = c.toDataURL("image/jpeg", 0.8);
+    fotoBase64 = url.split(",")[1];
+    const pv = $("previa"); pv.src = url; pv.style.display = "block";
+    pv.classList.remove("flash"); void pv.offsetWidth; pv.classList.add("flash");
+  }
+
   $("pFoto").onchange = e => {
     const arq = e.target.files[0]; if (!arq) return;
+    fecharWebcam();
     const img = new Image();
-    img.onload = () => {
-      const max = 900, esc = Math.min(1, max / Math.max(img.width, img.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      const url = c.toDataURL("image/jpeg", 0.8);
-      fotoBase64 = url.split(",")[1];
-      $("previa").src = url; $("previa").style.display = "block";
-      URL.revokeObjectURL(img.src);
-    };
+    img.onload = () => { usarImagem(img, img.width, img.height); URL.revokeObjectURL(img.src); };
     img.onerror = () => { $("erroProduto").textContent = "Não consegui ler essa imagem."; };
     img.src = URL.createObjectURL(arq);
   };
+
+  // ---------- Webcam ----------
+  let stream = null;
+  function pararStream(){
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; $("video").srcObject = null;
+  }
+  function fecharWebcam(){ pararStream(); $("painelWebcam").classList.add("oculto"); }
+  function lembrarCamera(id){ try { localStorage.setItem("camera", id); } catch(e) {} }
+  function cameraSalva(){ try { return localStorage.getItem("camera") || ""; } catch(e) { return ""; } }
+
+  async function ligarWebcam(idDesejado){
+    pararStream();
+    const qualidade = {width:{ideal:1280}, height:{ideal:720}};
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({audio:false,
+        video: idDesejado ? Object.assign({deviceId:{exact:idDesejado}}, qualidade) : qualidade});
+    } catch(err) {
+      if (!idDesejado) throw err;
+      stream = await navigator.mediaDevices.getUserMedia({audio:false, video:qualidade}); // câmera salva sumiu
+    }
+    $("video").srcObject = stream;
+    const atual = stream.getVideoTracks()[0].getSettings().deviceId || "";
+    const cameras = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+    // Na primeira vez, prefere a Logitech se houver mais de uma câmera
+    if (!idDesejado && cameras.length > 1){
+      const logi = cameras.find(c => /logi/i.test(c.label));
+      if (logi && logi.deviceId !== atual) return ligarWebcam(logi.deviceId);
+    }
+    const sel = $("listaCameras"); sel.innerHTML = "";
+    cameras.forEach((c, i) => {
+      const o = document.createElement("option");
+      o.value = c.deviceId; o.textContent = c.label || ("Câmera " + (i + 1));
+      o.selected = c.deviceId === atual; sel.appendChild(o);
+    });
+    sel.classList.toggle("oculto", cameras.length < 2);
+    if (atual) lembrarCamera(atual);
+  }
+
+  $("btnWebcam").onclick = async () => {
+    $("erroProduto").textContent = "";
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      $("erroProduto").textContent = "Este navegador não permite usar a webcam aqui."; return;
+    }
+    $("painelWebcam").classList.remove("oculto");
+    const b = $("btnWebcam"); b.disabled = true;
+    try { await ligarWebcam(cameraSalva()); }
+    catch(err) {
+      fecharWebcam();
+      const n = err && err.name;
+      $("erroProduto").textContent =
+        n === "NotAllowedError" ? "A câmera foi bloqueada. Clique no cadeado ao lado do endereço e permita a câmera." :
+        n === "NotFoundError" ? "Nenhuma webcam encontrada. Confira se ela está ligada no USB." :
+        n === "NotReadableError" ? "A webcam está sendo usada por outro programa (feche Zoom, Teams, etc.)." :
+        "Não foi possível abrir a webcam.";
+    } finally { b.disabled = false; }
+  };
+  $("listaCameras").onchange = e => ligarWebcam(e.target.value).catch(() => { $("erroProduto").textContent = "Não consegui trocar de câmera."; });
+  $("btnFecharWebcam").onclick = fecharWebcam;
+  $("btnFotografar").onclick = () => {
+    const v = $("video");
+    if (!v.videoWidth) { $("erroProduto").textContent = "Espere a imagem da câmera aparecer."; return; }
+    usarImagem(v, v.videoWidth, v.videoHeight);
+    fecharWebcam();
+  };
+  $("dlgProduto").addEventListener("close", fecharWebcam);
+  $("btnNovoCam").onclick = () => { abrirProduto(null); $("btnWebcam").click(); };
 
   $("formProduto").onsubmit = async e => {
     e.preventDefault();

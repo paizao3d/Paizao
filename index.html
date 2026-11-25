@@ -53,6 +53,9 @@
   .previa{width:100%;max-height:200px;object-fit:contain;border-radius:10px;background:#f1eee8;display:none}
   dialog{max-height:92vh;overflow:auto}
   .pesquisa{border:1px solid var(--linha);border-radius:12px;padding:12px 14px;background:#fbfaf7;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+  .dois{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+  .valor{display:flex;flex-direction:column;background:#fff;border:1px solid var(--linha);border-radius:10px;padding:10px 12px}
+  .pesquisa .media.barato{color:#9a5b00}
   .pesquisa .media{font-size:1.35rem;font-weight:700;color:var(--cor-escura)}
   .pesquisa .suave{color:var(--suave);margin:0}
   .pesquisa ul{margin:0;padding-left:18px}
@@ -91,7 +94,7 @@
   <div class="grade" id="grade"></div>
   <p class="vazio oculto" id="vazio">Nenhum produto por aqui ainda.</p>
 </main>
-<footer>versão CAT-004</footer>
+<footer>versão CAT-006</footer>
 
 <!-- Login -->
 <dialog id="dlgLogin">
@@ -118,7 +121,7 @@
       <label>Quantidade <input type="number" id="pQtd" min="0" step="1" inputmode="numeric" required></label>
     </div>
     <label>Descrição (opcional) <textarea id="pDesc" maxlength="500"></textarea></label>
-    <button type="button" class="btn claro" id="btnPesquisar">Pesquisar preço médio na internet</button>
+    <button type="button" class="btn claro" id="btnPesquisar">Pesquisar preço na internet (pelo nome)</button>
     <div class="pesquisa oculto" id="resultadoPreco" aria-live="polite"></div>
     <span class="rotulo">Foto</span>
     <div class="foto-opcoes">
@@ -192,7 +195,7 @@
     if (d.acao === "pesquisarPreco"){
       if (!d.nome) return {ok:false, erro:"Escreva o nome do produto primeiro."};
       const ofertas = [{loja:"Loja A", preco:44.9}, {loja:"Loja B", preco:52}, {loja:"Loja C", preco:47.5}];
-      return {ok:true, media:48.13, minimo:44.9, maximo:52, ofertas, fontes:[],
+      return {ok:true, media:48.13, minimo:44.9, maximo:52, maisBarato:ofertas[0], ofertas, fontes:[],
         observacao:"Resultado de exemplo. No site de verdade a pesquisa é feita na internet."};
     }
     return {ok:false, erro:"Ação inválida."};
@@ -292,15 +295,20 @@
     if (!nome) { caixa.appendChild(el("p", "erro", "Escreva o nome do produto primeiro.")); return; }
     b.disabled = true; b.textContent = "Pesquisando… (pode levar uns 20 segundos)";
     try {
-      const r = await api({acao:"pesquisarPreco", token, nome, descricao:$("pDesc").value.trim()});
+      const r = await api({acao:"pesquisarPreco", token, nome});
       caixa.innerHTML = "";
       if (!r.ok) { if (r.sair) guardarToken(""); caixa.appendChild(el("p", "erro", r.erro || "Não foi possível pesquisar.")); return; }
-      caixa.appendChild(el("span", "suave", "Preço médio na internet"));
-      caixa.appendChild(el("span", "media", reais(r.media)));
-      caixa.appendChild(el("p", "suave", r.ofertas.length + (r.ofertas.length === 1 ? " oferta" : " ofertas") + ", de " + reais(r.minimo) + " a " + reais(r.maximo)));
-      const usar = el("button", "btn", "Usar preço médio");
-      usar.type = "button"; usar.onclick = () => { $("pPreco").value = r.media.toFixed(2); };
-      caixa.appendChild(usar);
+      const barato = r.maisBarato || {loja:"", preco:r.minimo};
+      const dois = el("div", "dois");
+      const bMedia = el("div", "valor"); bMedia.append(el("span", "suave", "Preço médio"), el("span", "media", reais(r.media)));
+      const bBarato = el("div", "valor"); bBarato.append(el("span", "suave", "Mais barato"), el("span", "media barato", reais(barato.preco)));
+      if (barato.loja) bBarato.appendChild(el("span", "suave", barato.loja));
+      dois.append(bMedia, bBarato); caixa.appendChild(dois);
+      caixa.appendChild(el("p", "suave", r.ofertas.length + (r.ofertas.length === 1 ? " oferta encontrada" : " ofertas encontradas") + ", de " + reais(r.minimo) + " a " + reais(r.maximo)));
+      const usos = el("div", "foto-opcoes");
+      const usarM = el("button", "btn", "Usar preço médio"); usarM.type = "button"; usarM.onclick = () => { $("pPreco").value = r.media.toFixed(2); };
+      const usarB = el("button", "btn claro", "Usar mais barato"); usarB.type = "button"; usarB.onclick = () => { $("pPreco").value = Number(barato.preco).toFixed(2); };
+      usos.append(usarM, usarB); caixa.appendChild(usos);
       const ul = el("ul");
       r.ofertas.forEach(o => { const li = el("li"); li.append(el("span", null, o.loja), el("span", null, reais(o.preco))); ul.appendChild(li); });
       caixa.appendChild(ul);
@@ -322,7 +330,7 @@
       }
     } catch(err) {
       caixa.innerHTML = ""; caixa.appendChild(el("p", "erro", "Sem conexão. Tente de novo."));
-    } finally { b.disabled = false; b.textContent = "Pesquisar preço médio na internet"; }
+    } finally { b.disabled = false; b.textContent = "Pesquisar preço na internet (pelo nome)"; }
   };
   $("btnNovo").onclick = () => abrirProduto(null);
 

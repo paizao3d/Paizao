@@ -73,6 +73,11 @@
   .flash{animation:flash .35s ease-out}
   @keyframes flash{from{filter:brightness(2.2)}to{filter:none}}
   @media (prefers-reduced-motion:reduce){.flash{animation:none}}
+  .bloqueado{text-align:center;padding:60px 20px;color:var(--suave)}
+  .bloqueado h2{color:var(--tinta);margin:0 0 6px}
+  .card.so-foto .foto{aspect-ratio:1/1}
+  .link{background:none;border:0;padding:4px;color:var(--cor-escura);text-decoration:underline;cursor:pointer;font-size:inherit}
+  body.caseiro footer{padding-top:48px}
   footer{text-align:center;color:var(--suave);font-size:.78rem;padding:0 0 24px}
   .oculto{display:none!important}
 </style>
@@ -90,11 +95,16 @@
 </header>
 
 <main>
-  <div class="aviso oculto" id="avisoDemo">Modo demonstração: entre com <b>admin</b> / <b>demo</b>. Nada é salvo de verdade.</div>
+  <div class="aviso oculto" id="avisoDemo">Modo demonstração: usuários <b>admin</b>, <b>user</b>, <b>visita</b> ou <b>caseiro</b>, todos com a senha <b>demo</b>. Nada é salvo de verdade.</div>
+  <div class="bloqueado oculto" id="telaLogin">
+    <h2>Bem-vindo</h2>
+    <p>Entre com seu usuário e senha para ver os produtos.</p>
+    <button class="btn" id="btnEntrar2">Entrar</button>
+  </div>
   <div class="grade" id="grade"></div>
   <p class="vazio oculto" id="vazio">Nenhum produto por aqui ainda.</p>
 </main>
-<footer>versão CAT-006</footer>
+<footer id="rodape"><span id="quemEsta"></span>versão CAT-008 <button class="link oculto" id="btnSairRodape">Sair</button></footer>
 
 <!-- Login -->
 <dialog id="dlgLogin">
@@ -155,11 +165,16 @@
   if (DEMO) $("avisoDemo").classList.remove("oculto");
 
   let produtos = [];
-  let token = "";
+  let token = "", papel = "", usuarioAtual = "";
   let editandoId = null;
   let fotoBase64 = "";
-  try { token = sessionStorage.getItem("token") || ""; } catch(e) {}
+  try {
+    token = sessionStorage.getItem("token") || "";
+    papel = sessionStorage.getItem("papel") || "";
+    usuarioAtual = sessionStorage.getItem("usuarioAtual") || "";
+  } catch(e) {}
 
+  function el(tag, cls, texto){ const e = document.createElement(tag); if (cls) e.className = cls; if (texto != null) e.textContent = texto; return e; }
   const reais = n => Number(n).toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
 
   // Imagem simples (sem foto): fundo suave com a inicial do produto
@@ -171,7 +186,7 @@
 
   // ---------- Comunicação com a planilha ----------
   const demoDados = [
-    {id:"d1", nome:"Caneca de cerâmica", preco:39.9, quantidade:12, descricao:"350 ml, pode ir ao micro-ondas.", foto:""},
+    {id:"d1", nome:"Caneca de cerâmica", preco:39.9, quantidade:12, descricao:"350 ml, pode ir ao micro-ondas.", foto:semFoto("Caneca")},
     {id:"d2", nome:"Camiseta básica", preco:59, quantidade:5, descricao:"Algodão, tamanhos P ao GG.", foto:""},
     {id:"d3", nome:"Vela aromática", preco:29.5, quantidade:0, descricao:"Lavanda, 40 horas de queima.", foto:""}
   ];
@@ -183,7 +198,21 @@
   }
 
   function demoApi(d){
-    if (d.acao === "login") return (d.usuario === "admin" && d.senha === "demo") ? {ok:true, token:"demo"} : {ok:false, erro:"Usuário ou senha incorretos."};
+    const PAPEIS = ["admin", "user", "visita", "caseiro"];
+    if (d.acao === "login"){
+      const u = String(d.usuario).toLowerCase();
+      return (PAPEIS.includes(u) && d.senha === "demo") ? {ok:true, token:"demo|" + u, papel:u, usuario:u} : {ok:false, erro:"Usuário ou senha incorretos."};
+    }
+    const p0 = String(d.token || "").split("|")[1] || "";
+    if (!PAPEIS.includes(p0)) return {ok:false, erro:"Sessão expirada. Entre de novo.", sair:true};
+    if (d.acao === "listar"){
+      let lista = demoDados.map(x => Object.assign({}, x));
+      if (p0 === "caseiro") lista = [];
+      if (p0 === "visita") lista = lista.filter(x => x.foto).map(x => ({id:x.id, foto:x.foto}));
+      if (p0 === "user") lista.forEach(x => delete x.foto);
+      return {ok:true, papel:p0, produtos:lista};
+    }
+    if (p0 !== "admin") return {ok:false, erro:"Seu acesso não permite isso."};
     if (d.acao === "salvar"){
       const p = d.produto, foto = p.foto ? "data:image/jpeg;base64," + p.foto : null;
       const i = demoDados.findIndex(x => x.id === p.id);
@@ -202,64 +231,89 @@
   }
 
   async function carregar(){
-    try {
-      if (DEMO) produtos = demoDados.slice();
-      else {
-        const r = await (await fetch(API_URL + "?acao=listar")).json();
-        if (!r.ok) throw new Error(r.erro);
-        produtos = r.produtos;
+    produtos = [];
+    $("vazio").textContent = "Nenhum produto por aqui ainda.";
+    if (token){
+      try {
+        const r = await api({acao:"listar", token});
+        if (r.ok) { produtos = r.produtos || []; papel = r.papel; guardarSessao(token, papel, usuarioAtual); }
+        else if (r.sair) { sair(); return; }
+        else $("vazio").textContent = r.erro || "Não foi possível carregar os produtos agora.";
+      } catch(e) {
+        $("vazio").textContent = "Não foi possível carregar os produtos agora.";
       }
-    } catch(e) {
-      $("vazio").textContent = "Não foi possível carregar os produtos agora.";
-      produtos = [];
     }
     desenhar();
   }
 
   // ---------- Tela ----------
   function desenhar(){
+    const logado = !!token, admin = papel === "admin";
+    document.body.classList.toggle("caseiro", papel === "caseiro");
+    $("telaLogin").classList.toggle("oculto", logado);
+    document.querySelector("header").classList.toggle("oculto", papel === "caseiro");
+    document.querySelector("main").classList.toggle("oculto", papel === "caseiro");
+    $("busca").classList.toggle("oculto", !(admin || papel === "user"));
+    $("btnNovo").classList.toggle("oculto", !admin);
+    $("btnNovoCam").classList.toggle("oculto", !admin);
+    $("btnSair").classList.toggle("oculto", !logado);
+    $("btnEntrar").classList.toggle("oculto", logado);
+    $("btnSairRodape").classList.toggle("oculto", papel !== "caseiro");
+    $("quemEsta").textContent = logado && usuarioAtual ? "Conectado como " + usuarioAtual + " · " : "";
+
     const termo = $("busca").value.trim().toLowerCase();
-    const lista = produtos.filter(p => !termo || (p.nome + " " + p.descricao).toLowerCase().includes(termo));
+    const lista = produtos.filter(p => !termo || ((p.nome || "") + " " + (p.descricao || "")).toLowerCase().includes(termo));
     const grade = $("grade");
     grade.innerHTML = "";
     lista.forEach(p => {
-      const card = document.createElement("article");
-      card.className = "card";
-      const img = document.createElement("img");
-      img.className = "foto"; img.loading = "lazy"; img.alt = p.nome;
-      img.src = p.foto || semFoto(p.nome);
-      img.onerror = () => { img.onerror = null; img.src = semFoto(p.nome); };
-      const corpo = document.createElement("div"); corpo.className = "corpo";
-      const h2 = document.createElement("h2"); h2.textContent = p.nome;
-      corpo.appendChild(h2);
-      if (p.descricao){ const d = document.createElement("p"); d.className = "desc"; d.textContent = p.descricao; corpo.appendChild(d); }
-      const rod = document.createElement("div"); rod.className = "rodape";
-      const pr = document.createElement("span"); pr.className = "preco"; pr.textContent = reais(p.preco);
-      const q = document.createElement("span");
-      q.className = "qtd" + (p.quantidade > 0 ? "" : " zero");
-      q.textContent = p.quantidade > 0 ? p.quantidade + (p.quantidade === 1 ? " disponível" : " disponíveis") : "Esgotado";
-      rod.append(pr, q); corpo.appendChild(rod);
-      card.append(img, corpo);
-      if (token){
-        const ac = document.createElement("div"); ac.className = "acoes";
-        const ed = document.createElement("button"); ed.className = "btn claro"; ed.textContent = "Editar"; ed.onclick = () => abrirProduto(p);
-        const ex = document.createElement("button"); ex.className = "btn perigo"; ex.textContent = "Excluir"; ex.onclick = () => excluir(p, ex);
+      const card = el("article", "card");
+      // visita: só a foto
+      if (papel === "visita"){
+        card.classList.add("so-foto");
+        const img = el("img", "foto"); img.loading = "lazy"; img.alt = "Foto do produto"; img.src = p.foto;
+        card.appendChild(img); grade.appendChild(card); return;
+      }
+      // admin vê a foto; user não
+      if (admin){
+        const img = el("img", "foto"); img.loading = "lazy"; img.alt = p.nome;
+        img.src = p.foto || semFoto(p.nome);
+        img.onerror = () => { img.onerror = null; img.src = semFoto(p.nome); };
+        card.appendChild(img);
+      }
+      const corpo = el("div", "corpo");
+      corpo.appendChild(el("h2", null, p.nome));
+      if (p.descricao) corpo.appendChild(el("p", "desc", p.descricao));
+      const rod = el("div", "rodape");
+      const q = el("span", "qtd" + (p.quantidade > 0 ? "" : " zero"),
+        p.quantidade > 0 ? p.quantidade + (p.quantidade === 1 ? " disponível" : " disponíveis") : "Esgotado");
+      rod.append(el("span", "preco", reais(p.preco)), q); corpo.appendChild(rod);
+      card.appendChild(corpo);
+      if (admin){
+        const ac = el("div", "acoes");
+        const ed = el("button", "btn claro", "Editar"); ed.onclick = () => abrirProduto(p);
+        const ex = el("button", "btn perigo", "Excluir"); ex.onclick = () => excluir(p, ex);
         ac.append(ed, ex); card.appendChild(ac);
       }
       grade.appendChild(card);
     });
-    $("vazio").classList.toggle("oculto", lista.length > 0);
-    $("btnNovo").classList.toggle("oculto", !token);
-    $("btnNovoCam").classList.toggle("oculto", !token);
-    $("btnSair").classList.toggle("oculto", !token);
-    $("btnEntrar").classList.toggle("oculto", !!token);
+    $("vazio").classList.toggle("oculto", !logado || lista.length > 0);
   }
 
-  function guardarToken(t){ token = t; try { t ? sessionStorage.setItem("token", t) : sessionStorage.removeItem("token"); } catch(e) {} }
+  function guardarSessao(t, p, u){
+    token = t; papel = p; usuarioAtual = u;
+    try {
+      if (t) { sessionStorage.setItem("token", t); sessionStorage.setItem("papel", p); sessionStorage.setItem("usuarioAtual", u); }
+      else ["token", "papel", "usuarioAtual"].forEach(k => sessionStorage.removeItem(k));
+    } catch(e) {}
+  }
+  function sair(){ guardarSessao("", "", ""); produtos = []; desenhar(); }
 
   // ---------- Login ----------
-  $("btnEntrar").onclick = () => { $("erroLogin").textContent = ""; $("dlgLogin").showModal(); $("usuario").focus(); };
-  $("btnSair").onclick = () => { guardarToken(""); desenhar(); };
+  function abrirLogin(){ $("erroLogin").textContent = ""; if (!$("dlgLogin").open) $("dlgLogin").showModal(); $("usuario").focus(); }
+  $("btnEntrar").onclick = abrirLogin;
+  $("btnEntrar2").onclick = abrirLogin;
+  $("btnSair").onclick = sair;
+  $("btnSairRodape").onclick = sair;
   $("mostrarSenha").onchange = e => { $("senha").type = e.target.checked ? "text" : "password"; };
   $("formLogin").onsubmit = async e => {
     e.preventDefault();
@@ -267,8 +321,9 @@
     try {
       const r = await api({acao:"login", usuario:$("usuario").value.trim(), senha:$("senha").value});
       if (!r.ok) { $("erroLogin").textContent = r.erro || "Não foi possível entrar."; return; }
-      guardarToken(r.token); $("senha").value = ""; $("mostrarSenha").checked = false; $("senha").type = "password";
-      $("dlgLogin").close(); desenhar();
+      guardarSessao(r.token, r.papel, r.usuario || $("usuario").value.trim());
+      $("senha").value = ""; $("mostrarSenha").checked = false; $("senha").type = "password";
+      $("dlgLogin").close(); await carregar();
     } catch(err) { $("erroLogin").textContent = "Sem conexão. Tente de novo."; }
     finally { b.disabled = false; }
   };
@@ -286,7 +341,6 @@
   }
 
   // ---------- Pesquisa de preço médio ----------
-  function el(tag, cls, texto){ const e = document.createElement(tag); if (cls) e.className = cls; if (texto != null) e.textContent = texto; return e; }
 
   $("btnPesquisar").onclick = async () => {
     const caixa = $("resultadoPreco"), b = $("btnPesquisar");
@@ -297,7 +351,7 @@
     try {
       const r = await api({acao:"pesquisarPreco", token, nome});
       caixa.innerHTML = "";
-      if (!r.ok) { if (r.sair) guardarToken(""); caixa.appendChild(el("p", "erro", r.erro || "Não foi possível pesquisar.")); return; }
+      if (!r.ok) { if (r.sair) sair(); caixa.appendChild(el("p", "erro", r.erro || "Não foi possível pesquisar.")); return; }
       const barato = r.maisBarato || {loja:"", preco:r.minimo};
       const dois = el("div", "dois");
       const bMedia = el("div", "valor"); bMedia.append(el("span", "suave", "Preço médio"), el("span", "media", reais(r.media)));
@@ -429,7 +483,7 @@
       const r = await api({acao:"salvar", token, produto:{
         id: editandoId, nome:$("pNome").value.trim(), preco:$("pPreco").value, quantidade:$("pQtd").value,
         descricao:$("pDesc").value.trim(), foto: fotoBase64 }});
-      if (!r.ok) { if (r.sair) guardarToken(""); $("erroProduto").textContent = r.erro || "Erro ao salvar."; return; }
+      if (!r.ok) { if (r.sair) sair(); $("erroProduto").textContent = r.erro || "Erro ao salvar."; return; }
       $("dlgProduto").close(); await carregar();
     } catch(err) { $("erroProduto").textContent = "Sem conexão. Tente de novo."; }
     finally { b.disabled = false; b.textContent = "Salvar"; }
@@ -440,14 +494,14 @@
     botao.disabled = true;
     try {
       const r = await api({acao:"excluir", token, id:p.id});
-      if (!r.ok) { if (r.sair) { guardarToken(""); desenhar(); } botao.disabled = false; botao.textContent = "Erro"; return; }
+      if (!r.ok) { if (r.sair) sair(); botao.disabled = false; botao.textContent = "Erro"; return; }
       await carregar();
     } catch(err) { botao.disabled = false; botao.textContent = "Erro"; }
   }
 
   document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
   $("busca").oninput = desenhar;
-  carregar();
+  carregar().then(() => { if (!token) abrirLogin(); });
 })();
 </script>
 </body>

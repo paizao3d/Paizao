@@ -104,7 +104,7 @@
   <div class="grade" id="grade"></div>
   <p class="vazio oculto" id="vazio">Nenhum produto por aqui ainda.</p>
 </main>
-<footer id="rodape"><span id="quemEsta"></span>versão CAT-008 <button class="link oculto" id="btnSairRodape">Sair</button></footer>
+<footer id="rodape"><span id="quemEsta"></span>versão CAT-009 <button class="link oculto" id="btnSairRodape">Sair</button></footer>
 
 <!-- Login -->
 <dialog id="dlgLogin">
@@ -501,6 +501,34 @@
 
   document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
   $("busca").oninput = desenhar;
+  // ---------- Código secreto: game1337 abre o jogo ----------
+  const SEGREDO = "game1337";
+  let digitado = "";
+  function abrirJogoSecreto(){
+    if (window.abrirJogo) return window.abrirJogo();
+    const sc = document.createElement("script");
+    sc.src = "jogo.js?v=CAT-009"; sc.charset = "utf-8";
+    sc.onload = () => window.abrirJogo && window.abrirJogo();
+    document.body.appendChild(sc);
+  }
+  // Digitando fora de campos de texto
+  document.addEventListener("keydown", e => {
+    if (window.jogoAberto || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+    const alvo = e.target;
+    if (alvo && (alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA")) return;
+    digitado = (digitado + e.key.toLowerCase()).slice(-SEGREDO.length);
+    if (digitado === SEGREDO) { digitado = ""; abrirJogoSecreto(); }
+  });
+  // Digitando dentro de um campo (busca, usuário, senha...)
+  document.addEventListener("input", e => {
+    const alvo = e.target;
+    if (!alvo || typeof alvo.value !== "string" || alvo.type === "file") return;
+    if (alvo.value.toLowerCase().includes(SEGREDO)) {
+      alvo.value = alvo.value.replace(/game1337/ig, "");
+      abrirJogoSecreto();
+    }
+  }, true);
+
   carregar().then(() => { if (!token) abrirLogin(); });
 })();
 </script>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerador Lotofácil</title>
+<style>
+  :root { --roxo:#930089; --roxo2:#6d0066; --fundo:#f6f1f6; --texto:#2a1f29; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--fundo); color:var(--texto); }
+  header { background:var(--roxo); color:#fff; padding:20px 16px; text-align:center; }
+  header h1 { margin:0; font-size:1.6rem; }
+  header p { margin:6px 0 0; opacity:.85; font-size:.95rem; }
+  main { max-width:1000px; margin:0 auto; padding:20px 12px 40px; }
+  .acoes { text-align:center; margin-bottom:12px; }
+  button { background:var(--roxo); color:#fff; border:0; border-radius:10px; padding:14px 28px; font-size:1.1rem; font-weight:600; cursor:pointer; }
+  button:hover { background:var(--roxo2); }
+  button:disabled { opacity:.5; cursor:wait; }
+  #info { text-align:center; font-size:.9rem; color:#6b5a69; min-height:1.2em; margin:10px 0 18px; }
+  h2 { font-size:1.05rem; margin:22px 0 6px; color:var(--roxo2); }
+  .sub { font-size:.85rem; color:#6b5a69; margin:0 0 10px; }
+  .jogo { display:flex; align-items:center; gap:8px; background:#fff; border-radius:12px; padding:10px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,.06); flex-wrap:wrap; }
+  .rot { width:92px; font-size:.8rem; font-weight:600; color:#6b5a69; }
+  .bolas { display:flex; flex-wrap:wrap; gap:5px; flex:1; }
+  .bola { width:34px; height:34px; border-radius:50%; background:var(--roxo); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.9rem; }
+  .copiar { background:#eee; color:#333; font-size:.8rem; padding:8px 12px; border-radius:8px; font-weight:500; }
+  .copiar:hover { background:#ddd; }
+  .aviso { margin-top:28px; font-size:.8rem; color:#7a6a78; text-align:center; line-height:1.5; }
+  @media (max-width:560px){ .rot{ width:100%; } .bola{ width:30px; height:30px; font-size:.8rem; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Gerador de jogos – Lotofácil</h1>
+  <p>Baseado em todos os concursos já sorteados</p>
+</header>
+
+<main>
+  <div class="acoes"><button id="btn" onclick="gerar()">Gerar jogos</button></div>
+  <div id="info">Clique no botão para gerar 10 jogos.</div>
+  <div id="saida"></div>
+
+  <p class="aviso">
+    O sorteio da Lotofácil é aleatório: jogos "baseados nos premiados" não têm mais chance que os aleatórios.<br>
+    Chance de 15 acertos com aposta simples: 1 em 3.268.760. Jogue com responsabilidade.
+  </p>
+</main>
+
+<script>
+const FONTES = [
+  'https://cdn.jsdelivr.net/gh/guilhermeasn/loteria.json@master/data/lotofacil.json',
+  'https://fastly.jsdelivr.net/gh/guilhermeasn/loteria.json@master/data/lotofacil.json',
+  'https://raw.githubusercontent.com/guilhermeasn/loteria.json/master/data/lotofacil.json'
+];
+let CONCURSOS = null;
+
+async function carregar() {
+  if (CONCURSOS) return CONCURSOS;
+  for (const url of FONTES) {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) continue;
+      const dados = await r.json();
+      CONCURSOS = Object.keys(dados)
+        .map(k => [Number(k)].concat(dados[k].map(Number)))
+        .filter(c => c.length === 16)
+        .sort((a, b) => a[0] - b[0]);
+      if (CONCURSOS.length) return CONCURSOS;
+    } catch (e) {}
+  }
+  throw new Error('sem resultados');
+}
+
+async function gerar() {
+  const btn = document.getElementById('btn');
+  const info = document.getElementById('info');
+  btn.disabled = true;
+  info.textContent = 'Carregando resultados...';
+  try {
+    const concursos = await carregar();
+    const premiados = new Set(concursos.map(c => chave(c.slice(1))));
+    const est = estatisticas(concursos);
+
+    const aleat = [];
+    const pesoIgual = Array(26).fill(1);
+    while (aleat.length < 5) {
+      const j = sortear(pesoIgual);
+      if (valido(j, premiados, aleat)) aleat.push(j);
+    }
+
+    const estat = [];
+    let tent = 0;
+    while (estat.length < 5) {
+      const j = sortear(est.peso);
+      tent++;
+      const ok = tent > 20000 || (
+        dentro(soma(j), est.soma) &&
+        dentro(j.filter(n => n % 2).length, est.impares) &&
+        dentro(comuns(j, est.ultimo), est.repet)
+      );
+      if (ok && valido(j, premiados, estat.concat(aleat))) estat.push(j);
+    }
+
+    const ult = concursos[concursos.length - 1][0];
+    info.textContent = 'Base: ' + concursos.length + ' concursos (até o nº ' + ult + ') – gerado em ' +
+      new Date().toLocaleString('pt-BR');
+    mostrar(aleat, estat);
+  } catch (e) {
+    info.textContent = 'Não consegui carregar os resultados. Verifique a internet e tente de novo.';
+  }
+  btn.disabled = false;
+}
+
+function mostrar(aleat, estat) {
+  const s = document.getElementById('saida');
+  s.innerHTML =
+    '<h2>Jogos aleatórios</h2><p class="sub">Todas as dezenas com a mesma chance.</p>' +
+    aleat.map((j, i) => linha('Aleatório ' + (i + 1), j)).join('') +
+    '<h2>Baseados nos premiados</h2><p class="sub">Dezenas que mais saíram pesam mais; soma, ímpares e repetidas do último concurso dentro do padrão histórico.</p>' +
+    estat.map((j, i) => linha('Premiados ' + (i + 1), j)).join('');
+}
+
+function linha(rot, j) {
+  const txt = j.map(n => String(n).padStart(2, '0')).join(' ');
+  return '<div class="jogo"><div class="rot">' + rot + '</div><div class="bolas">' +
+    j.map(n => '<div class="bola">' + String(n).padStart(2, '0') + '</div>').join('') +
+    '</div><button class="copiar" onclick="copiar(this,\'' + txt + '\')">Copiar</button></div>';
+}
+
+function copiar(b, txt) {
+  navigator.clipboard.writeText(txt).then(() => {
+    b.textContent = 'Copiado!';
+    setTimeout(() => b.textContent = 'Copiar', 1500);
+  });
+}
+
+function estatisticas(concursos) {
+  const tot = Array(26).fill(0), rec = Array(26).fill(0);
+  const recentes = concursos.slice(-100);
+  concursos.forEach(c => c.slice(1).forEach(n => tot[n]++));
+  recentes.forEach(c => c.slice(1).forEach(n => rec[n]++));
+  const peso = Array(26).fill(0);
+  for (let n = 1; n <= 25; n++) peso[n] = tot[n] / concursos.length + 2 * rec[n] / recentes.length;
+
+  const somas = concursos.map(c => soma(c.slice(1))).sort((a, b) => a - b);
+  const impares = concursos.map(c => c.slice(1).filter(n => n % 2).length).sort((a, b) => a - b);
+  const repet = [];
+  for (let i = 1; i < concursos.length; i++) repet.push(comuns(concursos[i].slice(1), concursos[i - 1].slice(1)));
+  repet.sort((a, b) => a - b);
+  return { peso, soma: faixa(somas), impares: faixa(impares), repet: faixa(repet), ultimo: concursos[concursos.length - 1].slice(1) };
+}
+
+function sortear(peso) {
+  const disp = []; for (let n = 1; n <= 25; n++) disp.push(n);
+  const jogo = [];
+  while (jogo.length < 15) {
+    const total = disp.reduce((s, n) => s + peso[n], 0);
+    let r = Math.random() * total, i = 0;
+    while (i < disp.length - 1 && r >= peso[disp[i]]) { r -= peso[disp[i]]; i++; }
+    jogo.push(disp.splice(i, 1)[0]);
+  }
+  return jogo.sort((a, b) => a - b);
+}
+function valido(j, premiados, lista) { const k = chave(j); return !premiados.has(k) && !lista.some(x => chave(x) === k); }
+function chave(a) { return a.slice().sort((x, y) => x - y).join('-'); }
+function soma(a) { return a.reduce((s, n) => s + n, 0); }
+function comuns(a, b) { return a.filter(n => b.includes(n)).length; }
+function faixa(a) { return [a[Math.floor(a.length * 0.1)], a[Math.floor(a.length * 0.9)]]; }
+function dentro(v, f) { return v >= f[0] && v <= f[1]; }
+</script>
+</body>
+</html>

@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catálogo</title>
+<style>
+  :root{
+    --fundo:#f7f5f1; --cartao:#fff; --tinta:#1f1d1a; --suave:#6f6a62; --linha:#e7e2da;
+    --cor:#2f6f5e; --cor-escura:#245748; --perigo:#b3402f; --raio:14px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--fundo);color:var(--tinta);line-height:1.45}
+  button,input,textarea{font:inherit;color:inherit}
+  header{position:sticky;top:0;z-index:5;background:rgba(247,245,241,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--linha)}
+  .topo{max-width:1100px;margin:0 auto;padding:14px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .topo h1{font-size:1.25rem;margin:0;flex:1;min-width:160px;letter-spacing:-.01em}
+  .busca{flex:1 1 220px;max-width:320px;padding:9px 12px;border:1px solid var(--linha);border-radius:10px;background:#fff}
+  .btn{border:0;border-radius:10px;padding:9px 14px;cursor:pointer;background:var(--cor);color:#fff;font-weight:600}
+  .btn:hover{background:var(--cor-escura)}
+  .btn.claro{background:#fff;color:var(--tinta);border:1px solid var(--linha)}
+  .btn.claro:hover{background:#f1eee8}
+  .btn.perigo{background:#fff;color:var(--perigo);border:1px solid #ecd0ca}
+  .btn:disabled{opacity:.6;cursor:wait}
+  main{max-width:1100px;margin:0 auto;padding:20px 18px 40px}
+  .aviso{background:#fff7e0;border:1px solid #f0dfa8;border-radius:10px;padding:10px 14px;margin-bottom:16px;font-size:.92rem}
+  .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px}
+  .card{background:var(--cartao);border:1px solid var(--linha);border-radius:var(--raio);overflow:hidden;display:flex;flex-direction:column}
+  .card .foto{aspect-ratio:1/1;background:#eee9e1;display:block;width:100%;object-fit:cover}
+  .card .corpo{padding:12px 14px 14px;display:flex;flex-direction:column;gap:4px;flex:1}
+  .card h2{font-size:1rem;margin:0}
+  .card .desc{color:var(--suave);font-size:.88rem;margin:0}
+  .card .rodape{display:flex;justify-content:space-between;align-items:baseline;margin-top:auto;padding-top:8px}
+  .preco{font-size:1.15rem;font-weight:700}
+  .qtd{font-size:.82rem;color:var(--suave)}
+  .qtd.zero{color:var(--perigo);font-weight:600}
+  .acoes{display:flex;gap:8px;padding:0 14px 14px}
+  .acoes .btn{flex:1;padding:7px 10px;font-size:.88rem}
+  .vazio{text-align:center;color:var(--suave);padding:60px 0}
+  dialog{border:0;border-radius:16px;padding:0;width:min(440px,92vw);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+  dialog::backdrop{background:rgba(20,18,15,.45)}
+  dialog form{padding:22px;display:flex;flex-direction:column;gap:12px}
+  dialog h3{margin:0 0 4px;font-size:1.15rem}
+  label{font-size:.88rem;font-weight:600;display:flex;flex-direction:column;gap:5px}
+  input[type=text],input[type=password],input[type=number],textarea{padding:10px 12px;border:1px solid var(--linha);border-radius:10px;background:#fff;font-weight:400}
+  textarea{resize:vertical;min-height:70px}
+  .linha2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+  label input[type=text],label input[type=password],label input[type=number],label textarea{width:100%}
+  .check{flex-direction:row;align-items:center;gap:8px;font-weight:500;cursor:pointer}
+  .check input{width:18px;height:18px}
+  .erro{color:var(--perigo);font-size:.88rem;min-height:1.2em;margin:0}
+  .botoes{display:flex;gap:10px;justify-content:flex-end}
+  .previa{width:100%;max-height:200px;object-fit:contain;border-radius:10px;background:#f1eee8;display:none}
+  dialog{max-height:92vh;overflow:auto}
+  .pesquisa{border:1px solid var(--linha);border-radius:12px;padding:12px 14px;background:#fbfaf7;display:flex;flex-direction:column;gap:6px;font-size:.9rem}
+  .pesquisa .media{font-size:1.35rem;font-weight:700;color:var(--cor-escura)}
+  .pesquisa .suave{color:var(--suave);margin:0}
+  .pesquisa ul{margin:0;padding-left:18px}
+  .pesquisa li{display:flex;justify-content:space-between;gap:10px}
+  .pesquisa a{color:var(--cor-escura);word-break:break-word}
+  .pesquisa iframe{border:0;width:100%;height:64px}
+  .pesquisa .btn{align-self:flex-start;padding:7px 12px;font-size:.88rem}
+  footer{text-align:center;color:var(--suave);font-size:.78rem;padding:0 0 24px}
+  .oculto{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="topo">
+    <h1 id="titulo">Catálogo</h1>
+    <input class="busca" id="busca" type="search" placeholder="Buscar produto…" aria-label="Buscar produto">
+    <button class="btn oculto" id="btnNovo">+ Novo produto</button>
+    <button class="btn claro" id="btnEntrar">Entrar</button>
+    <button class="btn claro oculto" id="btnSair">Sair</button>
+  </div>
+</header>
+
+<main>
+  <div class="aviso oculto" id="avisoDemo">Modo demonstração: entre com <b>admin</b> / <b>demo</b>. Nada é salvo de verdade.</div>
+  <div class="grade" id="grade"></div>
+  <p class="vazio oculto" id="vazio">Nenhum produto por aqui ainda.</p>
+</main>
+<footer>versão CAT-002</footer>
+
+<!-- Login -->
+<dialog id="dlgLogin">
+  <form id="formLogin">
+    <h3>Entrar</h3>
+    <label>Usuário <input type="text" id="usuario" autocomplete="username" required></label>
+    <label>Senha <input type="password" id="senha" autocomplete="current-password" required></label>
+    <label class="check"><input type="checkbox" id="mostrarSenha"> Mostrar senha</label>
+    <p class="erro" id="erroLogin"></p>
+    <div class="botoes">
+      <button type="button" class="btn claro" data-fechar>Cancelar</button>
+      <button type="submit" class="btn" id="btnLogin">Entrar</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Produto -->
+<dialog id="dlgProduto">
+  <form id="formProduto">
+    <h3 id="tituloProduto">Novo produto</h3>
+    <label>Nome <input type="text" id="pNome" maxlength="120" required></label>
+    <div class="linha2">
+      <label>Preço (R$) <input type="number" id="pPreco" min="0" step="0.01" inputmode="decimal" required></label>
+      <label>Quantidade <input type="number" id="pQtd" min="0" step="1" inputmode="numeric" required></label>
+    </div>
+    <label>Descrição (opcional) <textarea id="pDesc" maxlength="500"></textarea></label>
+    <button type="button" class="btn claro" id="btnPesquisar">Pesquisar preço médio na internet</button>
+    <div class="pesquisa oculto" id="resultadoPreco" aria-live="polite"></div>
+    <label>Foto <input type="file" id="pFoto" accept="image/*"></label>
+    <img class="previa" id="previa" alt="Prévia da foto">
+    <p class="erro" id="erroProduto"></p>
+    <div class="botoes">
+      <button type="button" class="btn claro" data-fechar>Cancelar</button>
+      <button type="submit" class="btn" id="btnSalvar">Salvar</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="config.js"></script>
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const DEMO = typeof API_URL === "undefined" || !API_URL;
+  const nomeLoja = (typeof NOME_LOJA !== "undefined" && NOME_LOJA) || "Catálogo";
+  $("titulo").textContent = nomeLoja; document.title = nomeLoja;
+  if (DEMO) $("avisoDemo").classList.remove("oculto");
+
+  let produtos = [];
+  let token = "";
+  let editandoId = null;
+  let fotoBase64 = "";
+  try { token = sessionStorage.getItem("token") || ""; } catch(e) {}
+
+  const reais = n => Number(n).toLocaleString("pt-BR", {style:"currency", currency:"BRL"});
+
+  // Imagem simples (sem foto): fundo suave com a inicial do produto
+  function semFoto(nome){
+    const letra = (nome || "?").trim().charAt(0).toUpperCase() || "?";
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#ebe5da"/><text x="50" y="62" font-family="system-ui,sans-serif" font-size="38" fill="#a89f90" text-anchor="middle">${letra.replace(/[<&>]/g,"")}</text></svg>`;
+    return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  }
+
+  // ---------- Comunicação com a planilha ----------
+  const demoDados = [
+    {id:"d1", nome:"Caneca de cerâmica", preco:39.9, quantidade:12, descricao:"350 ml, pode ir ao micro-ondas.", foto:""},
+    {id:"d2", nome:"Camiseta básica", preco:59, quantidade:5, descricao:"Algodão, tamanhos P ao GG.", foto:""},
+    {id:"d3", nome:"Vela aromática", preco:29.5, quantidade:0, descricao:"Lavanda, 40 horas de queima.", foto:""}
+  ];
+
+  async function api(dados){
+    if (DEMO) return demoApi(dados);
+    const r = await fetch(API_URL, {method:"POST", body: JSON.stringify(dados)});
+    return r.json();
+  }
+
+  function demoApi(d){
+    if (d.acao === "login") return (d.usuario === "admin" && d.senha === "demo") ? {ok:true, token:"demo"} : {ok:false, erro:"Usuário ou senha incorretos."};
+    if (d.acao === "salvar"){
+      const p = d.produto, foto = p.foto ? "data:image/jpeg;base64," + p.foto : null;
+      const i = demoDados.findIndex(x => x.id === p.id);
+      const novo = {id: p.id || "d" + Date.now(), nome:p.nome, preco:+p.preco, quantidade:+p.quantidade, descricao:p.descricao, foto: foto || (i >= 0 ? demoDados[i].foto : "")};
+      if (i >= 0) demoDados[i] = novo; else demoDados.push(novo);
+      return {ok:true};
+    }
+    if (d.acao === "excluir"){ const i = demoDados.findIndex(x => x.id === d.id); if (i >= 0) demoDados.splice(i,1); return {ok:true}; }
+    if (d.acao === "pesquisarPreco"){
+      if (!d.nome) return {ok:false, erro:"Escreva o nome do produto primeiro."};
+      const ofertas = [{loja:"Loja A", preco:44.9}, {loja:"Loja B", preco:52}, {loja:"Loja C", preco:47.5}];
+      return {ok:true, media:48.13, minimo:44.9, maximo:52, ofertas, fontes:[],
+        observacao:"Resultado de exemplo. No site de verdade a pesquisa é feita na internet."};
+    }
+    return {ok:false, erro:"Ação inválida."};
+  }
+
+  async function carregar(){
+    try {
+      if (DEMO) produtos = demoDados.slice();
+      else {
+        const r = await (await fetch(API_URL + "?acao=listar")).json();
+        if (!r.ok) throw new Error(r.erro);
+        produtos = r.produtos;
+      }
+    } catch(e) {
+      $("vazio").textContent = "Não foi possível carregar os produtos agora.";
+      produtos = [];
+    }
+    desenhar();
+  }
+
+  // ---------- Tela ----------
+  function desenhar(){
+    const termo = $("busca").value.trim().toLowerCase();
+    const lista = produtos.filter(p => !termo || (p.nome + " " + p.descricao).toLowerCase().includes(termo));
+    const grade = $("grade");
+    grade.innerHTML = "";
+    lista.forEach(p => {
+      const card = document.createElement("article");
+      card.className = "card";
+      const img = document.createElement("img");
+      img.className = "foto"; img.loading = "lazy"; img.alt = p.nome;
+      img.src = p.foto || semFoto(p.nome);
+      img.onerror = () => { img.onerror = null; img.src = semFoto(p.nome); };
+      const corpo = document.createElement("div"); corpo.className = "corpo";
+      const h2 = document.createElement("h2"); h2.textContent = p.nome;
+      corpo.appendChild(h2);
+      if (p.descricao){ const d = document.createElement("p"); d.className = "desc"; d.textContent = p.descricao; corpo.appendChild(d); }
+      const rod = document.createElement("div"); rod.className = "rodape";
+      const pr = document.createElement("span"); pr.className = "preco"; pr.textContent = reais(p.preco);
+      const q = document.createElement("span");
+      q.className = "qtd" + (p.quantidade > 0 ? "" : " zero");
+      q.textContent = p.quantidade > 0 ? p.quantidade + (p.quantidade === 1 ? " disponível" : " disponíveis") : "Esgotado";
+      rod.append(pr, q); corpo.appendChild(rod);
+      card.append(img, corpo);
+      if (token){
+        const ac = document.createElement("div"); ac.className = "acoes";
+        const ed = document.createElement("button"); ed.className = "btn claro"; ed.textContent = "Editar"; ed.onclick = () => abrirProduto(p);
+        const ex = document.createElement("button"); ex.className = "btn perigo"; ex.textContent = "Excluir"; ex.onclick = () => excluir(p, ex);
+        ac.append(ed, ex); card.appendChild(ac);
+      }
+      grade.appendChild(card);
+    });
+    $("vazio").classList.toggle("oculto", lista.length > 0);
+    $("btnNovo").classList.toggle("oculto", !token);
+    $("btnSair").classList.toggle("oculto", !token);
+    $("btnEntrar").classList.toggle("oculto", !!token);
+  }
+
+  function guardarToken(t){ token = t; try { t ? sessionStorage.setItem("token", t) : sessionStorage.removeItem("token"); } catch(e) {} }
+
+  // ---------- Login ----------
+  $("btnEntrar").onclick = () => { $("erroLogin").textContent = ""; $("dlgLogin").showModal(); $("usuario").focus(); };
+  $("btnSair").onclick = () => { guardarToken(""); desenhar(); };
+  $("mostrarSenha").onchange = e => { $("senha").type = e.target.checked ? "text" : "password"; };
+  $("formLogin").onsubmit = async e => {
+    e.preventDefault();
+    const b = $("btnLogin"); b.disabled = true; $("erroLogin").textContent = "";
+    try {
+      const r = await api({acao:"login", usuario:$("usuario").value.trim(), senha:$("senha").value});
+      if (!r.ok) { $("erroLogin").textContent = r.erro || "Não foi possível entrar."; return; }
+      guardarToken(r.token); $("senha").value = ""; $("mostrarSenha").checked = false; $("senha").type = "password";
+      $("dlgLogin").close(); desenhar();
+    } catch(err) { $("erroLogin").textContent = "Sem conexão. Tente de novo."; }
+    finally { b.disabled = false; }
+  };
+
+  // ---------- Produto ----------
+  function abrirProduto(p){
+    editandoId = p ? p.id : null; fotoBase64 = "";
+    $("tituloProduto").textContent = p ? "Editar produto" : "Novo produto";
+    $("pNome").value = p ? p.nome : ""; $("pPreco").value = p ? p.preco : ""; $("pQtd").value = p ? p.quantidade : "";
+    $("pDesc").value = p ? p.descricao : ""; $("pFoto").value = "";
+    const pv = $("previa"); if (p && p.foto){ pv.src = p.foto; pv.style.display = "block"; } else { pv.removeAttribute("src"); pv.style.display = "none"; }
+    $("erroProduto").textContent = "";
+    $("resultadoPreco").classList.add("oculto"); $("resultadoPreco").innerHTML = "";
+    $("dlgProduto").showModal();
+  }
+
+  // ---------- Pesquisa de preço médio ----------
+  function el(tag, cls, texto){ const e = document.createElement(tag); if (cls) e.className = cls; if (texto != null) e.textContent = texto; return e; }
+
+  $("btnPesquisar").onclick = async () => {
+    const caixa = $("resultadoPreco"), b = $("btnPesquisar");
+    const nome = $("pNome").value.trim();
+    caixa.innerHTML = ""; caixa.classList.remove("oculto");
+    if (!nome) { caixa.appendChild(el("p", "erro", "Escreva o nome do produto primeiro.")); return; }
+    b.disabled = true; b.textContent = "Pesquisando… (pode levar uns 20 segundos)";
+    try {
+      const r = await api({acao:"pesquisarPreco", token, nome, descricao:$("pDesc").value.trim()});
+      caixa.innerHTML = "";
+      if (!r.ok) { if (r.sair) guardarToken(""); caixa.appendChild(el("p", "erro", r.erro || "Não foi possível pesquisar.")); return; }
+      caixa.appendChild(el("span", "suave", "Preço médio na internet"));
+      caixa.appendChild(el("span", "media", reais(r.media)));
+      caixa.appendChild(el("p", "suave", r.ofertas.length + (r.ofertas.length === 1 ? " oferta" : " ofertas") + ", de " + reais(r.minimo) + " a " + reais(r.maximo)));
+      const usar = el("button", "btn", "Usar preço médio");
+      usar.type = "button"; usar.onclick = () => { $("pPreco").value = r.media.toFixed(2); };
+      caixa.appendChild(usar);
+      const ul = el("ul");
+      r.ofertas.forEach(o => { const li = el("li"); li.append(el("span", null, o.loja), el("span", null, reais(o.preco))); ul.appendChild(li); });
+      caixa.appendChild(ul);
+      if (r.observacao) caixa.appendChild(el("p", "suave", r.observacao));
+      if (r.fontes && r.fontes.length){
+        const f = el("p", "suave", "Fontes: ");
+        r.fontes.forEach((x, i) => {
+          if (!/^https:\/\//.test(x.url)) return;
+          const a = el("a", null, x.titulo); a.href = x.url; a.target = "_blank"; a.rel = "noopener";
+          if (i) f.append(", "); f.appendChild(a);
+        });
+        caixa.appendChild(f);
+      }
+      if (r.sugestaoGoogle){
+        const fr = document.createElement("iframe");
+        fr.setAttribute("sandbox", "allow-popups allow-popups-to-escape-sandbox");
+        fr.title = "Pesquisas no Google"; fr.srcdoc = r.sugestaoGoogle;
+        caixa.appendChild(fr);
+      }
+    } catch(err) {
+      caixa.innerHTML = ""; caixa.appendChild(el("p", "erro", "Sem conexão. Tente de novo."));
+    } finally { b.disabled = false; b.textContent = "Pesquisar preço médio na internet"; }
+  };
+  $("btnNovo").onclick = () => abrirProduto(null);
+
+  // Diminui a foto antes de enviar (site leve)
+  $("pFoto").onchange = e => {
+    const arq = e.target.files[0]; if (!arq) return;
+    const img = new Image();
+    img.onload = () => {
+      const max = 900, esc = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * esc); c.height = Math.round(img.height * esc);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      const url = c.toDataURL("image/jpeg", 0.8);
+      fotoBase64 = url.split(",")[1];
+      $("previa").src = url; $("previa").style.display = "block";
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => { $("erroProduto").textContent = "Não consegui ler essa imagem."; };
+    img.src = URL.createObjectURL(arq);
+  };
+
+  $("formProduto").onsubmit = async e => {
+    e.preventDefault();
+    const b = $("btnSalvar"); b.disabled = true; b.textContent = "Salvando…"; $("erroProduto").textContent = "";
+    try {
+      const r = await api({acao:"salvar", token, produto:{
+        id: editandoId, nome:$("pNome").value.trim(), preco:$("pPreco").value, quantidade:$("pQtd").value,
+        descricao:$("pDesc").value.trim(), foto: fotoBase64 }});
+      if (!r.ok) { if (r.sair) guardarToken(""); $("erroProduto").textContent = r.erro || "Erro ao salvar."; return; }
+      $("dlgProduto").close(); await carregar();
+    } catch(err) { $("erroProduto").textContent = "Sem conexão. Tente de novo."; }
+    finally { b.disabled = false; b.textContent = "Salvar"; }
+  };
+
+  async function excluir(p, botao){
+    if (botao.dataset.confirmar !== "1") { botao.dataset.confirmar = "1"; botao.textContent = "Confirmar?"; setTimeout(() => { botao.dataset.confirmar = ""; botao.textContent = "Excluir"; }, 3000); return; }
+    botao.disabled = true;
+    try {
+      const r = await api({acao:"excluir", token, id:p.id});
+      if (!r.ok) { if (r.sair) { guardarToken(""); desenhar(); } botao.disabled = false; botao.textContent = "Erro"; return; }
+      await carregar();
+    } catch(err) { botao.disabled = false; botao.textContent = "Erro"; }
+  }
+
+  document.querySelectorAll("[data-fechar]").forEach(b => b.onclick = () => b.closest("dialog").close());
+  $("busca").oninput = desenhar;
+  carregar();
+})();
+</script>
+</body>
+</html>
